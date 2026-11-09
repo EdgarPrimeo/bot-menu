@@ -19,9 +19,37 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS claude_calls (ts INTEGER NOT NULL, ok INTEGER NOT NULL);
   CREATE TABLE IF NOT EXISTS corrections (id INTEGER PRIMARY KEY, contact INTEGER NOT NULL, proposed TEXT, sent TEXT NOT NULL, ts INTEGER NOT NULL);
   CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+  -- Répertoire des plats déjà faits : sert à reproposer nos classiques et à suivre ce qu'on mange.
+  CREATE TABLE IF NOT EXISTS dishes (
+    name TEXT PRIMARY KEY COLLATE NOCASE, times INTEGER NOT NULL DEFAULT 0, last_day TEXT, added TEXT NOT NULL);
 `);
 
 const now = () => Date.now();
+
+// Premier démarrage : on pré-remplit le répertoire avec la liste de départ (plats-initiaux.json).
+if (!db.prepare('SELECT 1 FROM kv WHERE key = ?').get('dishes_seeded')) {
+  let seed = [];
+  try { seed = JSON.parse(fs.readFileSync(p('plats-initiaux.json'), 'utf8')); } catch { /* pas de liste */ }
+  const ins = db.prepare("INSERT OR IGNORE INTO dishes (name, times, last_day, added) VALUES (?, 1, NULL, 'liste initiale')");
+  for (const name of seed) if (typeof name === 'string' && name.trim()) ins.run(name.trim());
+  db.prepare('INSERT INTO kv (key, value) VALUES (?, ?)').run('dishes_seeded', '1');
+}
+
+// Un plat choisi : +1 dans le répertoire (créé s'il est nouveau).
+export function recordDish(name, day) {
+  db.prepare(`INSERT INTO dishes (name, times, last_day, added) VALUES (?, 1, ?, ?)
+              ON CONFLICT(name) DO UPDATE SET times = times + 1, last_day = excluded.last_day`).run(name, day, day);
+}
+
+// Le plat du soir a changé : on retire l'ancien choix du compteur (et du répertoire s'il n'avait jamais été fait).
+export function unrecordDish(name) {
+  db.prepare('UPDATE dishes SET times = times - 1 WHERE name = ? AND times > 0').run(name);
+  db.prepare("DELETE FROM dishes WHERE name = ? AND times = 0 AND added <> 'liste initiale'").run(name);
+}
+
+export function listDishes(limit = 80) {
+  return db.prepare('SELECT name, times, last_day FROM dishes ORDER BY times DESC, last_day DESC, name LIMIT ?').all(limit);
+}
 
 export function addMessage(contact, direction, author, text) {
   return Number(db.prepare('INSERT INTO messages (contact, direction, author, text, ts) VALUES (?,?,?,?,?)')

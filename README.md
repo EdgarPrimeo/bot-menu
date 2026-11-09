@@ -2,9 +2,11 @@
 
 Petit assistant personnel qui s'occupe de la question du soir : **« qu'est-ce qu'on mange ce soir ? »**.
 
-- Chaque jour à **15h30**, il envoie un message WhatsApp à Elsa (depuis un numéro secondaire).
-- Il discute avec elle **uniquement du dîner de ce soir**, en proposant des idées tirées de nos goûts, jusqu'à ce qu'un plat soit choisi.
-- Il envoie à Edgar, sur **Telegram**, la **liste de courses** — ou « Elsa s'occupe des courses ».
+- Chaque jour à **15h30**, il envoie un message WhatsApp à Elsa (depuis un numéro secondaire) — sauf si elle a déjà lancé le sujet après 11h.
+- Il discute avec elle **uniquement du dîner de ce soir**, en proposant 2 idées tirées de nos goûts et de nos classiques, jusqu'à ce qu'un plat soit choisi. Il vérifie ce qui reste à la maison et qui achète les produits frais.
+- Toutes les 2-3 semaines, il propose aussi d'aller **au restaurant** ; si Elsa accepte, Edgar prend la main.
+- Il envoie à Edgar, sur **Telegram**, un message **« Recette : … »** avec la recette et **ses courses** — ou « Elsa s'occupe des courses ».
+- Il tient un **répertoire des plats déjà faits** (combien de fois, dernière date) pour reproposer ce qu'on aime sans se répéter.
 - Tous les autres messages d'Elsa sont **laissés passer** : pas de réponse, pas de traitement, rien de conservé.
 
 Il tourne sur un petit VPS (500 Mo de RAM), isolé sous un utilisateur Linux dédié `wabot`, sans aucun lien avec les autres projets du serveur.
@@ -59,10 +61,10 @@ sequenceDiagram
     E->>W: « Va pour la carbonara ! »
     W->>B: message
     B->>C: ...
-    C-->>B: {"action": "agreed", "dish": "...", "shopper": "edgar", "shopping": "..."}
+    C-->>B: {"action": "agreed", "dish": "...", "shopper": "both", "recipe": "...", "shopping": "...", "elsa_buys": "..."}
     B->>W: confirmation
     W->>E: « Super, carbonara ce soir ! »
-    B->>T: 🛒 Liste de courses
+    B->>T: 🍳 Recette + 🛒 courses
 ```
 
 ### Les décisions possibles de Claude
@@ -71,7 +73,7 @@ sequenceDiagram
 |---|---|---|
 | `ignore` | Le message ne parle pas du dîner de ce soir | Rien. Le message est effacé de la base. |
 | `reply` | La discussion repas continue | Répond à Elsa, copie silencieuse sur Telegram |
-| `agreed` | Un plat est choisi | Confirme à Elsa, puis sur Telegram : liste de courses (`shopper: edgar`), « Elsa s'occupe des courses » (`elsa`) ou « pas de courses » (`none`) |
+| `agreed` | Un plat est choisi et on sait qui achète quoi | Confirme à Elsa (sans recette), note le plat dans le répertoire, puis envoie à Edgar « Recette : … » avec, selon `shopper` : ses courses (`edgar`), ses courses + ce qu'Elsa prend (`both`), « Elsa s'occupe des courses » (`elsa`), « pas de courses » (`none`). Si `restaurant` : prévient Edgar, qui prend la main pour la soirée. |
 | `none` | « merci », « ok »… | Ne répond pas |
 | `escalate` | Message suspect ou demande d'engagement | Ne répond pas, alerte Edgar sur Telegram |
 
@@ -88,7 +90,7 @@ bot-menu/
 │   ├── claude.js             Appel à `claude -p` verrouillé (aucun outil), consignes, validation de la réponse
 │   ├── whatsapp.js           Lance et pilote wa-bridge (événements et envois en JSON)
 │   ├── telegram.js           Bot Telegram : n'obéit qu'à Edgar, notifications, boutons
-│   ├── db.js                 Base SQLite (module intégré à Node) : messages, plats, état du jour
+│   ├── db.js                 Base SQLite (module intégré à Node) : messages, plats du soir, répertoire des plats, état du jour
 │   ├── config.js             Lecture de .env, config.json et allowlist.json
 │   └── log.js                Journal d'événements — jamais de contenu de message
 │
@@ -99,6 +101,7 @@ bot-menu/
 │
 ├── gouts.md                  Nos goûts, habitudes et règles (le petit légume !)
 ├── style.md                  La façon d'écrire d'Edgar à Elsa
+├── plats-initiaux.json       Liste de départ du répertoire des plats (chargée au premier démarrage)
 ├── config.json               Horaires, ouvertures du message de 15h30, modèle, plafonds
 ├── allowlist.example.json    Modèle de liste blanche (le vrai fichier n'est pas dans le dépôt)
 ├── .env.example              Modèle des secrets (le vrai fichier n'est pas dans le dépôt)
@@ -113,7 +116,7 @@ bot-menu/
 | `.env` | Token Telegram, ID Telegram d'Edgar, numéro secondaire |
 | `allowlist.json` | Numéro d'Elsa |
 | `session/wa.db` | Session WhatsApp liée (équivaut à un accès au compte secondaire) |
-| `data/bot.db` | Historique des discussions repas, plats choisis |
+| `data/bot.db` | Historique des discussions repas, plat de chaque soir (`meals`), répertoire des plats déjà faits (`dishes` : nombre de fois, dernière date) |
 | `data/system-prompt.txt` | Consignes envoyées à Claude (régénéré à chaque appel) |
 | `logs/bot.log` | Journal d'événements, sans contenu de message |
 | `sandbox/` | Dossier vide d'où Claude est lancé |
@@ -145,7 +148,7 @@ bot-menu/
 | `/ecrire` | Écrire soi-même à Elsa via le bot |
 | `/pause` · `/reprendre` | Couper / réactiver le bot |
 | `/gouts` | Afficher le fichier de goûts |
-| `/plats` | Derniers plats choisis |
+| `/plats` | Derniers soirs et répertoire des plats déjà faits |
 
 Boutons sous les notifications : **✋ Je reprends la main** (le bot se tait pour la journée), **✍️ Répondre**, **🤖 Rendre la main au bot**.
 

@@ -64,14 +64,32 @@ function onNonText({ contact: c, jid }) {
   }
 }
 
+// Message « Recette : … » pour Edgar : la recette, puis qui achète quoi.
 async function notifyAgreed(c, d) {
-  if (d.shopper === 'elsa') {
-    await notify(`✅ Ce soir : ${d.dish}\n\n🛍 Pas besoin de faire les courses, ${c.name} s'en occupe.`);
-  } else if (d.shopper === 'none') {
-    await notify(`✅ Ce soir : ${d.dish}\n\nPas de courses nécessaires.`);
-  } else {
-    await notify(`🛒 Ce soir : ${d.dish}\n\nListe de courses :\n${d.shopping || '(Claude n\'a pas fourni de liste cette fois)'}`);
+  if (d.shopper === 'restaurant') {
+    await notify(`🍽 ${c.name} est partante pour le restaurant ce soir.\n\nÀ toi de jouer : le bot ne lui répond plus aujourd'hui, c'est toi qui prends la main.`, { keyboard: kb.forwarded(c.idx) });
+    return;
   }
+  const parts = [`🍳 Recette : ${d.dish}`];
+  if (d.recipe) parts.push(d.recipe);
+  if (d.shopper === 'elsa') parts.push(`🛍 Pas besoin de faire les courses, ${c.name} s'en occupe.`);
+  else if (d.shopper === 'none') parts.push('✅ Pas de courses nécessaires, on a tout.');
+  else {
+    parts.push(`🛒 Tes courses :\n${d.shopping || "(Claude n'a pas fourni de liste cette fois)"}`);
+    if (d.shopper === 'both' && d.elsaBuys) parts.push(`🛍 ${c.name} prend :\n${d.elsaBuys}`);
+  }
+  await notify(parts.join('\n\n'));
+}
+
+// Répertoire des plats : +1 pour le plat choisi ; si le choix du soir change, l'ancien est retiré.
+function recordCatalog(c, day, name) {
+  if (!name) return;
+  const key = `catalog:${day}:${c.idx}`;
+  const prev = db.kvGet(key);
+  if (prev && prev.toLowerCase() === name.toLowerCase()) return;
+  if (prev) db.unrecordDish(prev);
+  db.recordDish(name, day);
+  db.kvSet(key, name);
 }
 
 async function handleBatch(c, items) {
@@ -81,7 +99,10 @@ async function handleBatch(c, items) {
   const history = db.lastMessages(c.idx, config.historySize + items.length).filter((m) => !ids.has(m.id));
   let d;
   try {
-    d = await decide({ contactName: c.name, history, newMessages: texts, recentMeals: db.recentMeals(7) });
+    d = await decide({
+      contactName: c.name, history, newMessages: texts, recentMeals: db.recentMeals(14),
+      dishes: db.listDishes(), lastRestoProposal: db.kvGet('resto_proposed_day'),
+    });
   } catch (e) {
     if (!(e instanceof ClaudeUnavailable)) log.error('batch.unexpected', e);
     await notify(`⚠️ Erreur : Claude indisponible (${String(e.message).slice(0, 80)}). Rien n'a été envoyé à ${c.name}.\n\nSon message :\n${texts.join('\n')}`, { keyboard: kb.forwarded(c.idx) });
@@ -119,11 +140,14 @@ async function handleBatch(c, items) {
 
   switch (d.action) {
     case 'reply':
+      if (d.proposedRestaurant) db.kvSet('resto_proposed_day', day);
       await notify(`💬 ${c.name} : ${received}\n🤖 : ${d.message}`, { silent: true, keyboard: kb.monitor(c.idx) });
       break;
     case 'agreed':
       db.replaceMeal(c.idx, day, d.dish);
-      db.setSessionStatus(c.idx, day, 'agreed');
+      recordCatalog(c, day, d.catalog);
+      // Restaurant : Edgar prend la main pour la soirée (choix du lieu, réservation…).
+      db.setSessionStatus(c.idx, day, d.shopper === 'restaurant' ? 'owner' : 'agreed');
       await notify(`💬 ${c.name} : ${received}\n🤖 : ${d.message}`, { silent: true, keyboard: kb.monitor(c.idx) });
       await notifyAgreed(c, d);
       break;
@@ -185,7 +209,7 @@ const HELP = [
   '/pause — le bot ne répond plus (tout t\'est transféré)',
   '/reprendre — le bot répond à nouveau',
   '/gouts — voir le fichier de goûts',
-  '/plats — derniers plats décidés',
+  '/plats — derniers soirs et répertoire des plats déjà faits',
 ].join('\n');
 
 bot.command(['start', 'aide'], (ctx) => ctx.reply(HELP));
@@ -217,8 +241,11 @@ bot.command('envoyer', async (ctx) => {
 
 bot.command('gouts', (ctx) => ctx.reply(readTextFile('gouts.md').slice(0, 3900) || '(gouts.md est vide)'));
 bot.command('plats', (ctx) => {
-  const m = db.recentMeals(10);
-  return ctx.reply(m.length ? m.map((x) => `${x.day} : ${x.dish}`).join('\n') : 'Aucun plat enregistré pour le moment.');
+  const recent = db.recentMeals(7);
+  const rep = db.listDishes();
+  const lines = ['🗓 Derniers soirs :', ...(recent.length ? recent.map((x) => `${x.day} : ${x.dish}`) : ['(aucun pour le moment)'])];
+  lines.push('', `📚 Répertoire (${rep.length} plats) :`, ...rep.map((d) => `${d.name} — ${d.times} fois${d.last_day ? `, dernière ${d.last_day}` : ''}`));
+  return ctx.reply(lines.join('\n').slice(0, 3900));
 });
 
 bot.command('ecrire', (ctx) => {
@@ -299,7 +326,7 @@ async function main() {
     { command: 'pause', description: 'Mettre le bot en pause' },
     { command: 'reprendre', description: 'Réactiver le bot' },
     { command: 'gouts', description: 'Voir les goûts' },
-    { command: 'plats', description: 'Derniers plats décidés' },
+    { command: 'plats', description: 'Derniers soirs et répertoire des plats' },
   ]).catch((e) => log.error('telegram.commands', e));
   bot.start({ drop_pending_updates: true, onStart: () => log.info('telegram.started') }).catch((e) => { log.error('telegram.polling', e); process.exit(1); });
 
