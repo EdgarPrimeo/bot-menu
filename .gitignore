@@ -1,0 +1,12 @@
+# Secrets et données personnelles : jamais dans le dépôt
+.env
+allowlist.json
+session/
+data/
+logs/
+sandbox/
+
+# Généré
+node_modules/
+wa-bridge/wa-bridge
+wa-bridge/*.exe
