@@ -1,0 +1,15 @@
+{
+  "name": "menu-du-soir",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.js",
+  "engines": {
+    "node": ">=22.5"
+  },
+  "dependencies": {
+    "grammy": "^1.46.0",
+    "qrcode": "^1.5.4",
+    "qrcode-terminal": "^0.12.0"
+  }
+}
