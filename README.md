@@ -7,7 +7,7 @@ Petit assistant personnel qui s'occupe de la question du soir : **« qu'est-ce q
 - Toutes les 2-3 semaines, il propose aussi d'aller **au restaurant** ; si Elsa accepte, Edgar prend la main.
 - Il envoie à Edgar, sur **Telegram**, un message **« Recette : … »** avec la recette et **ses courses** — ou « Elsa s'occupe des courses ».
 - Il tient un **répertoire des plats déjà faits** (combien de fois, dernière date) pour reproposer ce qu'on aime sans se répéter.
-- Il tient un **carnet de notes** : envies de la semaine, plats mangés sans passer par lui, goûts durables (voir les commandes `/envie`, `/mange`, `/gout`).
+- Il tient un **carnet de notes** : envies, plats mangés sans passer par lui, goûts (commande `/note`).
 - Tous les autres messages d'Elsa sont **laissés passer** : pas de réponse, pas de traitement, rien de conservé.
 
 Il tourne sur un petit VPS (500 Mo de RAM), isolé sous un utilisateur Linux dédié `wabot`, sans aucun lien avec les autres projets du serveur.
@@ -148,14 +148,11 @@ bot-menu/
 | `/envoyer` | Envoie le message du jour tout de suite |
 | `/ecrire` | Écrire soi-même à Elsa via le bot |
 | `/pause` · `/reprendre` | Couper / réactiver le bot |
-| `/gouts` | Afficher le fichier de goûts |
+| `/gouts` | Afficher le fichier de goûts et les notes récentes |
 | `/plats` | Derniers soirs et répertoire des plats déjà faits |
-| `/envie <plat>` | Noter une envie du moment (« lasagnes cette semaine ») : proposée en priorité pendant 3 semaines, ou jusqu'à ce qu'on la fasse |
-| `/mange <plat> [hier]` | Noter un plat qu'on a mangé sans passer par le bot : il l'ajoute au répertoire et ne le repropose pas tout de suite |
-| `/gout <texte>` | Noter un goût durable (« Elsa adore les gnocchis », « pas de fenouil ») |
-| `/notes` · `/oublier <n°>` | Voir le carnet · supprimer une note |
+| `/note <texte>` | Noter ce que tu veux, en texte libre : une envie (« lasagnes cette semaine »), un plat mangé (« on a mangé des sushis hier »), un goût (« Elsa adore les gnocchis »)… `/note` seul affiche le carnet, `/note supprimer 12` retire une note |
 
-Le **carnet de notes** se remplit aussi tout seul : si Elsa écrit, même en passant, « j'aimerais des lasagnes cette semaine », « on a mangé des sushis dimanche » ou « je n'aime plus le fenouil », Claude ajoute une note (3 maximum par message, uniquement sur la nourriture) et Edgar est prévenu sur Telegram, avec le numéro pour la supprimer si besoin. Les notes sont relues à chaque message ; les messages d'Elsa hors repas restent, eux, sans aucune trace.
+Le **carnet de notes** est lu par Claude à chaque message (avec la date de chaque note, pour juger si une envie est dépassée). Il se remplit aussi tout seul : si Elsa écrit, même en passant, « j'aimerais des lasagnes cette semaine » ou « je n'aime plus le fenouil », Claude ajoute une note (3 maximum par message, uniquement sur la nourriture) et Edgar est prévenu sur Telegram, avec le numéro pour la supprimer. Les messages d'Elsa hors repas restent, eux, sans aucune trace.
 
 Boutons sous les notifications : **✋ Je reprends la main** (le bot se tait pour la journée), **✍️ Répondre**, **🤖 Rendre la main au bot**.
 

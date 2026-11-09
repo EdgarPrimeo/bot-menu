@@ -22,10 +22,9 @@ db.exec(`
   -- Répertoire des plats déjà faits : sert à reproposer nos classiques et à suivre ce qu'on mange.
   CREATE TABLE IF NOT EXISTS dishes (
     name TEXT PRIMARY KEY COLLATE NOCASE, times INTEGER NOT NULL DEFAULT 0, last_day TEXT, added TEXT NOT NULL);
-  -- Carnet de notes : envies du moment, plats mangés dont le bot n'a pas été informé, goûts durables.
+  -- Carnet de notes en texte libre (envies, plats mangés, goûts…) : Claude les lit et en tient compte.
   CREATE TABLE IF NOT EXISTS notes (
-    id INTEGER PRIMARY KEY, kind TEXT NOT NULL CHECK (kind IN ('envie','fait','gout')),
-    text TEXT NOT NULL, source TEXT NOT NULL, day TEXT NOT NULL, done INTEGER NOT NULL DEFAULT 0, ts INTEGER NOT NULL);
+    id INTEGER PRIMARY KEY, text TEXT NOT NULL, source TEXT NOT NULL, day TEXT NOT NULL, ts INTEGER NOT NULL);
 `);
 
 const now = () => Date.now();
@@ -55,60 +54,34 @@ export function listDishes(limit = 80) {
   return db.prepare('SELECT name, times, last_day FROM dishes ORDER BY times DESC, last_day DESC, name LIMIT ?').all(limit);
 }
 
-// ---------- Carnet de notes ----------
+// ---------- Carnet de notes (texte libre) ----------
 
-export const NOTE_KINDS = ['envie', 'fait', 'gout'];
-const MAX_NOTES = 300;
-const WISH_DAYS = 21;  // une envie non réalisée n'est plus proposée au bout de 3 semaines
-const DONE_DAYS = 30;  // « on a mangé ça » : on évite de le reproposer pendant un mois
+const MAX_NOTES = 200;
 
-const isoDay = (offsetDays = 0) => {
-  const d = new Date(Date.now() + offsetDays * 86400000);
+const isoDay = () => {
+  const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
-// Ajoute une note (texte d'une ligne, 140 caractères max). Renvoie la note, ou null si doublon / texte vide.
-export function addNote(kind, text, source, day = isoDay()) {
-  const t = String(text || '').replace(/\s+/g, ' ').trim().slice(0, 140);
-  if (!NOTE_KINDS.includes(kind) || !t) return null;
-  if (db.prepare('SELECT 1 FROM notes WHERE kind = ? AND text = ? COLLATE NOCASE AND done = 0').get(kind, t)) return null;
-  const id = Number(db.prepare('INSERT INTO notes (kind, text, source, day, ts) VALUES (?,?,?,?,?)')
-    .run(kind, t, source, day, now()).lastInsertRowid);
+// Ajoute une note (une ligne, 200 caractères max). Renvoie la note, ou null si doublon / texte vide.
+export function addNote(text, source) {
+  const t = String(text || '').replace(/\s+/g, ' ').trim().slice(0, 200);
+  if (!t) return null;
+  if (db.prepare('SELECT 1 FROM notes WHERE text = ? COLLATE NOCASE').get(t)) return null;
+  const day = isoDay();
+  const id = Number(db.prepare('INSERT INTO notes (text, source, day, ts) VALUES (?,?,?,?)').run(t, source, day, now()).lastInsertRowid);
   // Plafond : on ne garde que les plus récentes.
   db.prepare('DELETE FROM notes WHERE id NOT IN (SELECT id FROM notes ORDER BY ts DESC, id DESC LIMIT ?)').run(MAX_NOTES);
-  return { id, kind, text: t, source, day };
+  return { id, text: t, source, day };
 }
 
 export function deleteNote(id) {
   return db.prepare('DELETE FROM notes WHERE id = ?').run(id).changes > 0;
 }
 
-// Toutes les notes (pour /notes), les plus récentes en premier.
+// Les plus récentes en premier (pour /note et pour Claude, qui juge lui-même de l'âge d'une note grâce à sa date).
 export function listNotes(limit = 60) {
-  return db.prepare('SELECT id, kind, text, source, day, done FROM notes ORDER BY ts DESC, id DESC LIMIT ?').all(limit);
-}
-
-// Ce que Claude voit : envies encore actives, plats « faits » récents, goûts durables.
-export function notesForPrompt() {
-  const rows = (sql, ...args) => db.prepare(sql).all(...args);
-  return {
-    wishes: rows("SELECT text, day FROM notes WHERE kind = 'envie' AND done = 0 AND day >= ? ORDER BY ts DESC LIMIT 15", isoDay(-WISH_DAYS)),
-    done: rows("SELECT text, day FROM notes WHERE kind = 'fait' AND day >= ? ORDER BY day DESC, ts DESC LIMIT 20", isoDay(-DONE_DAYS)),
-    tastes: rows("SELECT text FROM notes WHERE kind = 'gout' ORDER BY ts DESC LIMIT 40"),
-  };
-}
-
-// Un plat vient d'être choisi : les envies qui le citent sont réalisées.
-export function markWishesDone(dish) {
-  const needle = String(dish || '').trim().toLowerCase();
-  if (needle.length < 3) return 0;
-  let n = 0;
-  const upd = db.prepare('UPDATE notes SET done = 1 WHERE id = ?');
-  for (const w of db.prepare("SELECT id, text FROM notes WHERE kind = 'envie' AND done = 0").all()) {
-    const t = w.text.toLowerCase();
-    if (t.length >= 3 && (t.includes(needle) || needle.includes(t))) { upd.run(w.id); n += 1; }
-  }
-  return n;
+  return db.prepare('SELECT id, text, source, day FROM notes ORDER BY ts DESC, id DESC LIMIT ?').all(limit);
 }
 
 export function addMessage(contact, direction, author, text) {

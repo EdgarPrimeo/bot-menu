@@ -81,18 +81,16 @@ async function notifyAgreed(c, d) {
   await notify(parts.join('\n\n'));
 }
 
-const NOTE_LABEL = { envie: '🌟 envie', fait: '🍽 déjà mangé', gout: '❤️ goût' };
-
 // Enregistre les notes tirées d'un message d'Elsa et prévient Edgar (discret), pour qu'il puisse les supprimer.
 async function saveNotes(c, notes) {
   const saved = [];
-  for (const n of notes || []) {
-    const row = db.addNote(n.kind, n.text, c.name.toLowerCase());
+  for (const text of notes || []) {
+    const row = db.addNote(text, c.name.toLowerCase());
     if (row) saved.push(row);
   }
   if (!saved.length) return;
   log.info('notes.saved', { contact: c.idx, n: saved.length });
-  await notify(`📝 Note${saved.length > 1 ? 's' : ''} ajoutée${saved.length > 1 ? 's' : ''} d'après ${c.name} :\n${saved.map((r) => `${NOTE_LABEL[r.kind]} #${r.id} : ${r.text}`).join('\n')}\n\n(/oublier <numéro> pour en supprimer une)`, { silent: true });
+  await notify(`📝 Note${saved.length > 1 ? 's' : ''} ajoutée${saved.length > 1 ? 's' : ''} d'après ${c.name} :\n${saved.map((r) => `#${r.id} : ${r.text}`).join('\n')}\n\n(/note supprimer <numéro> pour en retirer une)`, { silent: true });
 }
 
 // Répertoire des plats : +1 pour le plat choisi ; si le choix du soir change, l'ancien est retiré.
@@ -115,7 +113,7 @@ async function handleBatch(c, items) {
   try {
     d = await decide({
       contactName: c.name, history, newMessages: texts, recentMeals: db.recentMeals(14),
-      dishes: db.listDishes(), lastRestoProposal: db.kvGet('resto_proposed_day'), notes: db.notesForPrompt(),
+      dishes: db.listDishes(), lastRestoProposal: db.kvGet('resto_proposed_day'), notes: db.listNotes(),
     });
   } catch (e) {
     if (!(e instanceof ClaudeUnavailable)) log.error('batch.unexpected', e);
@@ -162,7 +160,6 @@ async function handleBatch(c, items) {
     case 'agreed':
       db.replaceMeal(c.idx, day, d.dish);
       recordCatalog(c, day, d.catalog);
-      db.markWishesDone(d.catalog || d.dish); // l'envie notée est réalisée
       // Restaurant : Edgar prend la main pour la soirée (choix du lieu, réservation…).
       db.setSessionStatus(c.idx, day, d.shopper === 'restaurant' ? 'owner' : 'agreed');
       await notify(`💬 ${c.name} : ${received}\n🤖 : ${d.message}`, { silent: true, keyboard: kb.monitor(c.idx) });
@@ -227,10 +224,7 @@ const HELP = [
   '/reprendre — le bot répond à nouveau',
   '/gouts — voir le fichier de goûts',
   '/plats — derniers soirs et répertoire des plats déjà faits',
-  '/envie <plat> — une envie pour la semaine (proposée en priorité)',
-  '/mange <plat> [hier] — un plat déjà mangé que le bot ne connaît pas',
-  '/gout <texte> — un goût durable (« pas de fenouil »)',
-  '/notes — voir le carnet · /oublier <numéro> — supprimer une note',
+  '/note <texte> — noter une envie, un plat mangé, un goût… (/note seul : voir le carnet)',
 ].join('\n');
 
 bot.command(['start', 'aide'], (ctx) => ctx.reply(HELP));
@@ -260,7 +254,11 @@ bot.command('envoyer', async (ctx) => {
   }
 });
 
-bot.command('gouts', (ctx) => ctx.reply(readTextFile('gouts.md').slice(0, 3900) || '(gouts.md est vide)'));
+bot.command('gouts', (ctx) => {
+  const notes = db.listNotes(30).map((r) => `- ${r.text} (${r.day})`).join('\n');
+  const text = `${readTextFile('gouts.md') || '(gouts.md est vide)'}\n\n📝 Notes récentes (/note pour en ajouter) :\n${notes || '(aucune)'}`;
+  return ctx.reply(text.slice(0, 3900));
+});
 bot.command('plats', (ctx) => {
   const recent = db.recentMeals(7);
   const rep = db.listDishes();
@@ -269,49 +267,19 @@ bot.command('plats', (ctx) => {
   return ctx.reply(lines.join('\n').slice(0, 3900));
 });
 
-// ----- Carnet de notes : envies, plats déjà mangés, goûts -----
-
-const argOf = (ctx) => String(ctx.match || '').trim();
-
-bot.command('envie', (ctx) => {
-  const row = db.addNote('envie', argOf(ctx), 'edgar');
-  if (!argOf(ctx)) return ctx.reply('Exemple : /envie lasagnes cette semaine');
-  return ctx.reply(row ? `🌟 Noté (#${row.id}) : ${row.text}\nLe bot la proposera en priorité (pendant 3 semaines, ou jusqu'à ce qu'on la fasse).` : 'Déjà dans le carnet.');
-});
-
-bot.command('mange', (ctx) => {
-  let text = argOf(ctx);
-  if (!text) return ctx.reply('Exemple : /mange sushis   ou   /mange pizza hier');
-  let day = today();
-  if (/\bhier$/i.test(text)) {
-    const d = new Date(Date.now() - 86400000);
-    day = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-    text = text.replace(/\s*\bhier$/i, '').trim();
+// ----- Carnet de notes : une seule commande, texte libre -----
+// /note <texte> ajoute · /note seul liste · /note supprimer <n°> retire. Claude lit le carnet à chaque message.
+bot.command('note', (ctx) => {
+  const arg = String(ctx.match || '').trim();
+  if (!arg) {
+    const rows = db.listNotes();
+    if (!rows.length) return ctx.reply('📝 Le carnet est vide.\nÉcris par exemple : /note j\'aimerais des lasagnes cette semaine');
+    return ctx.reply(['📝 Carnet de notes :', ...rows.map((r) => `#${r.id} : ${r.text} (${r.day}, ${r.source})`), '', '/note <texte> pour ajouter · /note supprimer <numéro>'].join('\n').slice(0, 3900));
   }
-  const row = db.addNote('fait', text, 'edgar', day);
-  if (!row) return ctx.reply('Déjà dans le carnet.');
-  db.recordDish(row.text, day); // aussi dans le répertoire des plats
-  db.markWishesDone(row.text);
-  return ctx.reply(`🍽 Noté (#${row.id}) : ${row.text} (${day}). Le bot ne le reproposera pas tout de suite.`);
-});
-
-bot.command('gout', (ctx) => {
-  const row = db.addNote('gout', argOf(ctx), 'edgar');
-  if (!argOf(ctx)) return ctx.reply('Exemple : /gout Elsa adore les gnocchis, pas de fenouil');
-  return ctx.reply(row ? `❤️ Noté (#${row.id}) : ${row.text}` : 'Déjà dans le carnet.');
-});
-
-bot.command('notes', (ctx) => {
-  const rows = db.listNotes();
-  if (!rows.length) return ctx.reply('📝 Le carnet est vide. /envie, /mange et /gout pour le remplir.');
-  const lines = rows.map((r) => `#${r.id} ${NOTE_LABEL[r.kind]}${r.done ? ' ✅ fait' : ''} : ${r.text} (${r.day}, ${r.source})`);
-  return ctx.reply(['📝 Carnet de notes :', ...lines, '', '/oublier <numéro> pour supprimer'].join('\n').slice(0, 3900));
-});
-
-bot.command('oublier', (ctx) => {
-  const id = Number(argOf(ctx).replace(/^#/, ''));
-  if (!Number.isInteger(id) || id <= 0) return ctx.reply('Exemple : /oublier 12 (le numéro est dans /notes)');
-  return ctx.reply(db.deleteNote(id) ? `🗑 Note #${id} supprimée.` : `Pas de note #${id}.`);
+  const del = arg.match(/^(?:supprimer|oublier|effacer)\s+#?(\d+)$/i);
+  if (del) return ctx.reply(db.deleteNote(Number(del[1])) ? `🗑 Note #${del[1]} supprimée.` : `Pas de note #${del[1]}.`);
+  const row = db.addNote(arg, 'edgar');
+  return ctx.reply(row ? `📝 Noté (#${row.id}) : ${row.text}` : 'Déjà dans le carnet.');
 });
 
 bot.command('ecrire', (ctx) => {
@@ -393,11 +361,7 @@ async function main() {
     { command: 'reprendre', description: 'Réactiver le bot' },
     { command: 'gouts', description: 'Voir les goûts' },
     { command: 'plats', description: 'Derniers soirs et répertoire des plats' },
-    { command: 'envie', description: 'Noter une envie (ex. lasagnes cette semaine)' },
-    { command: 'mange', description: 'Noter un plat déjà mangé' },
-    { command: 'gout', description: 'Noter un goût durable' },
-    { command: 'notes', description: 'Voir le carnet de notes' },
-    { command: 'oublier', description: 'Supprimer une note' },
+    { command: 'note', description: 'Noter une envie, un plat mangé, un goût…' },
   ]).catch((e) => log.error('telegram.commands', e));
   bot.start({ drop_pending_updates: true, onStart: () => log.info('telegram.started') }).catch((e) => { log.error('telegram.polling', e); process.exit(1); });
 
