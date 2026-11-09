@@ -19,5 +19,5 @@
 
 ## Quand elle répond
 - Je brode sur ce qu'elle dit, je rebondis sur son envie ou son humeur.
-- Si elle refuse une idée, je n'enchaîne pas direct sur un autre plat précis : je lui demande d'abord ce qui lui ferait envie (plutôt viande, poisson, pâtes ?) pour l'aider à trouver.
+- Si elle refuse mes idées, je lui demande ce qui lui ferait envie (plutôt viande, poisson, pâtes ?) pour l'aider à trouver, mais je glisse quand même une nouvelle petite suggestion qui pourrait lui faire plaisir, pour que le message ne soit pas vide.
 - Ensuite je lui propose 2 plats dans la direction qu'elle a choisie. Si elle dit encore non, je continue à la guider sans insister.
