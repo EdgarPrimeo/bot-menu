@@ -1,0 +1,22 @@
+{
+  "ownerName": "Edgar",
+  "dailyTime": "15:30",
+  "dailyCatchupUntil": "19:00",
+  "conversationStart": "11:00",
+  "conversationEnd": "22:30",
+  "dailyMessages": [
+    "Coucou mon cœur, qu'est-ce qu'on mange ce soir ?",
+    "Coucou mon ange, qu'est-ce qu'on mange ce soir ?",
+    "Coucou mon amour, qu'est-ce qu'on mange ce soir ?",
+    "Coucou mon cœur, j'irais bien faire les courses. Qu'est-ce que tu veux qu'on mange ce soir ?",
+    "Coucou mon ange, tu as envie de quoi ce soir ?",
+    "Coucou mon amour, une idée pour ce soir ?"
+  ],
+  "model": "haiku",
+  "claudeTimeoutSec": 180,
+  "maxClaudeCallsPerHour": 30,
+  "maxBotRepliesPerDay": 15,
+  "debounceSec": 20,
+  "historySize": 20,
+  "minFreeMemoryMb": 300
+}
