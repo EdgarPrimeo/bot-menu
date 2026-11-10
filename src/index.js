@@ -154,6 +154,11 @@ async function handleBatch(c, items) {
     case 'none':
       await notify(`💬 ${c.name} : ${received}\n(pas de réponse nécessaire)`, { silent: true, keyboard: kb.monitor(c.idx) });
       break;
+    case 'unclear':
+      // Le bot ne devine pas : il ne répond rien et passe la main à Edgar pour la journée.
+      db.setSessionStatus(c.idx, day, 'escalated');
+      await notify(`🤔 Le bot n'est pas sûr de comprendre ${c.name}, il n'a rien répondu : à toi de voir.\n\n💬 ${c.name} : ${received}${d.doubt ? `\n🤖 (doute) : ${d.doubt}` : ''}`, { keyboard: kb.forwarded(c.idx) });
+      break;
     case 'escalate':
       db.setSessionStatus(c.idx, day, 'escalated');
       await notify(`🙋 Message suspect ou demande d'engagement : le bot n'a pas répondu, à toi de voir.\n\n💬 ${c.name} : ${received}`, { keyboard: kb.forwarded(c.idx) });

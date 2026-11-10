@@ -12,11 +12,11 @@
     "Coucou mon ange, tu as envie de quoi ce soir ?",
     "Coucou mon amour, une idée pour ce soir ?"
   ],
-  "model": "haiku",
+  "model": "sonnet",
   "claudeTimeoutSec": 180,
   "maxClaudeCallsPerHour": 30,
   "maxBotRepliesPerDay": 15,
   "debounceSec": 20,
-  "historySize": 20,
+  "historySize": 30,
   "minFreeMemoryMb": 300
 }
