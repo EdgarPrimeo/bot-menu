@@ -81,18 +81,6 @@ async function notifyAgreed(c, d) {
   await notify(parts.join('\n\n'));
 }
 
-// Enregistre les notes tirées d'un message d'Elsa et prévient Edgar (discret), pour qu'il puisse les supprimer.
-async function saveNotes(c, notes) {
-  const saved = [];
-  for (const text of notes || []) {
-    const row = db.addNote(text, c.name.toLowerCase());
-    if (row) saved.push(row);
-  }
-  if (!saved.length) return;
-  log.info('notes.saved', { contact: c.idx, n: saved.length });
-  await notify(`📝 Note${saved.length > 1 ? 's' : ''} ajoutée${saved.length > 1 ? 's' : ''} d'après ${c.name} :\n${saved.map((r) => `#${r.id} : ${r.text}`).join('\n')}\n\n(/note supprimer <numéro> pour en retirer une)`, { silent: true });
-}
-
 // Répertoire des plats : +1 pour le plat choisi ; si le choix du soir change, l'ancien est retiré.
 function recordCatalog(c, day, name) {
   if (!name) return;
@@ -122,7 +110,6 @@ async function handleBatch(c, items) {
   }
 
   if (d.action === 'ignore') {
-    await saveNotes(c, d.notes); // seules les notes sur la nourriture sont gardées
     db.deleteMessages([...ids]); // hors sujet repas : on n'en garde aucune trace
     log.info('batch.ignored_off_topic', { contact: c.idx });
     return;
@@ -136,7 +123,6 @@ async function handleBatch(c, items) {
   }
 
   const received = texts.join('\n');
-  await saveNotes(c, d.notes);
   if (!db.getSession(c.idx, day)) db.setSessionStatus(c.idx, day, 'open'); // Elsa a lancé le sujet elle-même
   try {
     if (d.action === 'reply' || d.action === 'agreed') {

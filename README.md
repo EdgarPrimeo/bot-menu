@@ -7,7 +7,7 @@ Petit assistant personnel qui s'occupe de la question du soir : **« qu'est-ce q
 - Toutes les 2-3 semaines, il propose aussi d'aller **au restaurant** ; si Elsa accepte, Edgar prend la main.
 - Il envoie à Edgar, sur **Telegram**, un message **« Recette : … »** avec la recette et **ses courses** — ou « Elsa s'occupe des courses ».
 - Il tient un **répertoire des plats déjà faits** (combien de fois, dernière date) pour reproposer ce qu'on aime sans se répéter.
-- Il tient un **carnet de notes** : envies, plats mangés sans passer par lui, goûts (commande `/note`).
+- Edgar peut lui laisser de **petites notes** (commande `/note`) : envies du moment, plats mangés sans passer par lui. Les goûts de fond restent dans `gouts.md`.
 - Tous les autres messages d'Elsa sont **laissés passer** : pas de réponse, pas de traitement, rien de conservé.
 
 Il tourne sur un petit VPS (500 Mo de RAM), isolé sous un utilisateur Linux dédié `wabot`, sans aucun lien avec les autres projets du serveur.
@@ -117,7 +117,7 @@ bot-menu/
 | `.env` | Token Telegram, ID Telegram d'Edgar, numéro secondaire |
 | `allowlist.json` | Numéro d'Elsa |
 | `session/wa.db` | Session WhatsApp liée (équivaut à un accès au compte secondaire) |
-| `data/bot.db` | Historique des discussions repas, plat de chaque soir (`meals`), répertoire des plats déjà faits (`dishes` : nombre de fois, dernière date), carnet de notes (`notes` : envies, plats déjà mangés, goûts) |
+| `data/bot.db` | Historique des discussions repas, plat de chaque soir (`meals`), répertoire des plats déjà faits (`dishes` : nombre de fois, dernière date), carnet de notes d'Edgar (`notes`) |
 | `data/system-prompt.txt` | Consignes envoyées à Claude (régénéré à chaque appel) |
 | `logs/bot.log` | Journal d'événements, sans contenu de message |
 | `sandbox/` | Dossier vide d'où Claude est lancé |
@@ -150,9 +150,9 @@ bot-menu/
 | `/pause` · `/reprendre` | Couper / réactiver le bot |
 | `/gouts` | Afficher le fichier de goûts et les notes récentes |
 | `/plats` | Derniers soirs et répertoire des plats déjà faits |
-| `/note <texte>` | Noter ce que tu veux, en texte libre : une envie (« lasagnes cette semaine »), un plat mangé (« on a mangé des sushis hier »), un goût (« Elsa adore les gnocchis »)… `/note` seul affiche le carnet, `/note supprimer 12` retire une note |
+| `/note <texte>` | Noter une petite chose en texte libre : une envie (« lasagnes cette semaine »), un plat mangé (« on a mangé des sushis hier »)… `/note` seul affiche le carnet, `/note supprimer 12` retire une note |
 
-Le **carnet de notes** est lu par Claude à chaque message (avec la date de chaque note, pour juger si une envie est dépassée). Il se remplit aussi tout seul : si Elsa écrit, même en passant, « j'aimerais des lasagnes cette semaine » ou « je n'aime plus le fenouil », Claude ajoute une note (3 maximum par message, uniquement sur la nourriture) et Edgar est prévenu sur Telegram, avec le numéro pour la supprimer. Les messages d'Elsa hors repas restent, eux, sans aucune trace.
+Le **carnet de notes** est lu par Claude à chaque message, avec la date de chaque note (pour juger si une envie est dépassée). Seul Edgar peut y écrire : rien n'y est ajouté à partir des messages d'Elsa. Il complète `gouts.md`, qui reste la référence pour les goûts durables (Claude ne voit que les 60 notes les plus récentes, et le carnet en garde 200 au maximum).
 
 Boutons sous les notifications : **✋ Je reprends la main** (le bot se tait pour la journée), **✍️ Répondre**, **🤖 Rendre la main au bot**.
 
