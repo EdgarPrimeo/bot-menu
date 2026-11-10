@@ -22,6 +22,9 @@ db.exec(`
   -- Répertoire des plats déjà faits : sert à reproposer nos classiques et à suivre ce qu'on mange.
   CREATE TABLE IF NOT EXISTS dishes (
     name TEXT PRIMARY KEY COLLATE NOCASE, times INTEGER NOT NULL DEFAULT 0, last_day TEXT, added TEXT NOT NULL);
+  -- Carnet de notes en texte libre (envies, plats mangés, goûts…) : Claude les lit et en tient compte.
+  CREATE TABLE IF NOT EXISTS notes (
+    id INTEGER PRIMARY KEY, text TEXT NOT NULL, source TEXT NOT NULL, day TEXT NOT NULL, ts INTEGER NOT NULL);
 `);
 
 const now = () => Date.now();
@@ -49,6 +52,36 @@ export function unrecordDish(name) {
 
 export function listDishes(limit = 80) {
   return db.prepare('SELECT name, times, last_day FROM dishes ORDER BY times DESC, last_day DESC, name LIMIT ?').all(limit);
+}
+
+// ---------- Carnet de notes (texte libre) ----------
+
+const MAX_NOTES = 200;
+
+const isoDay = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
+// Ajoute une note (une ligne, 200 caractères max). Renvoie la note, ou null si doublon / texte vide.
+export function addNote(text, source) {
+  const t = String(text || '').replace(/\s+/g, ' ').trim().slice(0, 200);
+  if (!t) return null;
+  if (db.prepare('SELECT 1 FROM notes WHERE text = ? COLLATE NOCASE').get(t)) return null;
+  const day = isoDay();
+  const id = Number(db.prepare('INSERT INTO notes (text, source, day, ts) VALUES (?,?,?,?)').run(t, source, day, now()).lastInsertRowid);
+  // Plafond : on ne garde que les plus récentes.
+  db.prepare('DELETE FROM notes WHERE id NOT IN (SELECT id FROM notes ORDER BY ts DESC, id DESC LIMIT ?)').run(MAX_NOTES);
+  return { id, text: t, source, day };
+}
+
+export function deleteNote(id) {
+  return db.prepare('DELETE FROM notes WHERE id = ?').run(id).changes > 0;
+}
+
+// Les plus récentes en premier (pour /note et pour Claude, qui juge lui-même de l'âge d'une note grâce à sa date).
+export function listNotes(limit = 60) {
+  return db.prepare('SELECT id, text, source, day FROM notes ORDER BY ts DESC, id DESC LIMIT ?').all(limit);
 }
 
 export function addMessage(contact, direction, author, text) {

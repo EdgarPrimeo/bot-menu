@@ -7,6 +7,7 @@ Petit assistant personnel qui s'occupe de la question du soir : **« qu'est-ce q
 - Toutes les 2-3 semaines, il propose aussi d'aller **au restaurant** ; si Elsa accepte, Edgar prend la main.
 - Il envoie à Edgar, sur **Telegram**, un message **« Recette : … »** avec la recette et **ses courses** — ou « Elsa s'occupe des courses ».
 - Il tient un **répertoire des plats déjà faits** (combien de fois, dernière date) pour reproposer ce qu'on aime sans se répéter.
+- Edgar peut lui laisser de **petites notes** (commande `/note`) : envies du moment, plats mangés sans passer par lui. Les goûts de fond restent dans `gouts.md`.
 - Tous les autres messages d'Elsa sont **laissés passer** : pas de réponse, pas de traitement, rien de conservé.
 
 Il tourne sur un petit VPS (500 Mo de RAM), isolé sous un utilisateur Linux dédié `wabot`, sans aucun lien avec les autres projets du serveur.
@@ -90,7 +91,7 @@ bot-menu/
 │   ├── claude.js             Appel à `claude -p` verrouillé (aucun outil), consignes, validation de la réponse
 │   ├── whatsapp.js           Lance et pilote wa-bridge (événements et envois en JSON)
 │   ├── telegram.js           Bot Telegram : n'obéit qu'à Edgar, notifications, boutons
-│   ├── db.js                 Base SQLite (module intégré à Node) : messages, plats du soir, répertoire des plats, état du jour
+│   ├── db.js                 Base SQLite (module intégré à Node) : messages, plats du soir, répertoire des plats, carnet de notes, état du jour
 │   ├── config.js             Lecture de .env, config.json et allowlist.json
 │   └── log.js                Journal d'événements — jamais de contenu de message
 │
@@ -116,7 +117,7 @@ bot-menu/
 | `.env` | Token Telegram, ID Telegram d'Edgar, numéro secondaire |
 | `allowlist.json` | Numéro d'Elsa |
 | `session/wa.db` | Session WhatsApp liée (équivaut à un accès au compte secondaire) |
-| `data/bot.db` | Historique des discussions repas, plat de chaque soir (`meals`), répertoire des plats déjà faits (`dishes` : nombre de fois, dernière date) |
+| `data/bot.db` | Historique des discussions repas, plat de chaque soir (`meals`), répertoire des plats déjà faits (`dishes` : nombre de fois, dernière date), carnet de notes d'Edgar (`notes`) |
 | `data/system-prompt.txt` | Consignes envoyées à Claude (régénéré à chaque appel) |
 | `logs/bot.log` | Journal d'événements, sans contenu de message |
 | `sandbox/` | Dossier vide d'où Claude est lancé |
@@ -147,8 +148,11 @@ bot-menu/
 | `/envoyer` | Envoie le message du jour tout de suite |
 | `/ecrire` | Écrire soi-même à Elsa via le bot |
 | `/pause` · `/reprendre` | Couper / réactiver le bot |
-| `/gouts` | Afficher le fichier de goûts |
+| `/gouts` | Afficher le fichier de goûts et les notes récentes |
 | `/plats` | Derniers soirs et répertoire des plats déjà faits |
+| `/note <texte>` | Noter une petite chose en texte libre : une envie (« lasagnes cette semaine »), un plat mangé (« on a mangé des sushis hier »)… `/note` seul affiche le carnet, `/note supprimer 12` retire une note |
+
+Le **carnet de notes** est lu par Claude à chaque message, avec la date de chaque note (pour juger si une envie est dépassée). Seul Edgar peut y écrire : rien n'y est ajouté à partir des messages d'Elsa. Il complète `gouts.md`, qui reste la référence pour les goûts durables (Claude ne voit que les 60 notes les plus récentes, et le carnet en garde 200 au maximum).
 
 Boutons sous les notifications : **✋ Je reprends la main** (le bot se tait pour la journée), **✍️ Répondre**, **🤖 Rendre la main au bot**.
 
