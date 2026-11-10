@@ -97,9 +97,13 @@ async function handleBatch(c, items) {
   const texts = items.map((x) => x.text);
   const ids = new Set(items.map((x) => x.id));
   const history = db.lastMessages(c.idx, config.historySize + items.length).filter((m) => !ids.has(m.id));
+  // Déjà écrit à Elsa aujourd'hui (message du jour, bot ou Edgar) ? Alors pas de nouveau « Coucou mon cœur ».
+  const startOfDay = new Date().setHours(0, 0, 0, 0);
+  const alreadyGreeted = history.some((m) => m.direction === 'out' && m.ts >= startOfDay);
   let d;
   try {
     d = await decide({
+      alreadyGreeted,
       contactName: c.name, history, newMessages: texts, recentMeals: db.recentMeals(14),
       dishes: db.listDishes(), lastRestoProposal: db.kvGet('resto_proposed_day'), notes: db.listNotes(),
     });
