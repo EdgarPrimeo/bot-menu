@@ -43,6 +43,7 @@ function handleEvent(ev, h) {
     case 'disconnected':
       connected = false;
       log.warn('whatsapp.disconnected');
+      h.onDisconnect?.();
       break;
     case 'logged_out':
       connected = false;
@@ -111,6 +112,7 @@ export async function startWhatsApp(h) {
     for (const [, w] of pending) { clearTimeout(w.timer); w.reject(new Error('pont WhatsApp arrêté')); }
     pending.clear();
     log.warn('whatsapp.bridge_exit', { code });
+    h.onDisconnect?.();
     if (loggedOut) return; // il faudra relier à nouveau : on ne relance pas en boucle
     const delay = Math.min(60000, 5000 * 2 ** restarts++);
     setTimeout(() => startWhatsApp(h).catch((e) => log.error('whatsapp.restart', e)), delay);
