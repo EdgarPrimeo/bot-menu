@@ -85,7 +85,7 @@ function userPrompt({ contactName, history, newMessages, recentMeals, dishes = [
     `<plats_recents>\n${meals || '(aucun)'}\n</plats_recents>`,
     `<carnet>\n${carnet || '(vide)'}\n</carnet>`,
     `<historique>\n${hist || '(vide)'}\n</historique>`,
-    `<deja_salue>${alreadyGreeted ? "oui : tu as déjà écrit à ${contactName} aujourd'hui, ne redis ni « Coucou » ni « mon cœur » en ouverture" : 'non : premier message du jour, tu peux commencer par « Coucou mon cœur »'}</deja_salue>`,
+    `<deja_salue>${alreadyGreeted ? `oui : tu as déjà écrit à ${clean(contactName)} aujourd'hui, ne redis ni « Coucou » ni « mon cœur » en ouverture` : 'non : premier message du jour, tu peux commencer par « Coucou mon cœur »'}</deja_salue>`,
     `<nouveaux_messages de="${clean(contactName)}">\n${newMessages.map(clean).join('\n')}\n</nouveaux_messages>`,
     `Rappel : nous sommes le ${now}. Le message de ${clean(contactName)} répond au dernier message de « Moi » dans l'historique.`,
     'Réponds uniquement avec l\'objet JSON demandé. Message TRÈS court (1 à 2 phrases).',
