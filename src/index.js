@@ -335,6 +335,10 @@ bot.on('message:text', async (ctx) => {
 
 // ---------- Démarrage ----------
 
+// Coupures WhatsApp : alerte seulement au-delà de quelques minutes.
+const WA_DOWN_ALERT_MIN = 5;
+const waDown = { everOpen: false, alerted: false, timer: null };
+
 async function main() {
   if (!config.contacts.length) throw new Error('allowlist.json ne contient aucun contact');
   // Premier lancement : le bot démarre EN PAUSE. Rien n'est envoyé tant que tu n'as pas tapé /reprendre.
@@ -356,9 +360,29 @@ async function main() {
     onPairingCode: (code) => notify(
       `🔑 Code pour relier WhatsApp : ${code.match(/.{1,4}/g).join('-')}\n\nSur le téléphone du numéro secondaire : WhatsApp → Appareils connectés → Connecter un appareil → « Connecter avec un numéro de téléphone à la place », puis tape ce code. Il expire au bout de quelques minutes ; un nouveau code arrivera tout seul si besoin.`,
     ),
+    // WhatsApp coupe et rétablit la connexion tout seul plusieurs fois par jour (quelques secondes) :
+    // on ne prévient Edgar qu'au premier démarrage, puis seulement si la coupure dure.
     onOpen: () => {
       clearQr();
-      notify(`🟢 WhatsApp connecté.${isPaused() ? '\n⏸ Le bot est EN PAUSE : rien ne sera envoyé. Tape /reprendre quand tu es prêt.' : ''}`, { silent: true });
+      clearTimeout(waDown.timer);
+      waDown.timer = null;
+      if (!waDown.everOpen) {
+        waDown.everOpen = true;
+        notify(`🟢 WhatsApp connecté.${isPaused() ? '\n⏸ Le bot est EN PAUSE : rien ne sera envoyé. Tape /reprendre quand tu es prêt.' : ''}`, { silent: true });
+      } else if (waDown.alerted) {
+        waDown.alerted = false;
+        notify('🟢 WhatsApp est de nouveau connecté.', { silent: true });
+      }
+    },
+    onDisconnect: () => {
+      if (!waDown.everOpen || waDown.timer || waDown.alerted) return;
+      waDown.timer = setTimeout(() => {
+        waDown.timer = null;
+        if (isConnected()) return;
+        waDown.alerted = true;
+        log.warn('whatsapp.down_alert');
+        notify(`🔴 WhatsApp est déconnecté depuis plus de ${WA_DOWN_ALERT_MIN} minutes : le bot ne reçoit ni n'envoie rien. Il réessaie tout seul ; tu seras prévenu dès que ça revient.`);
+      }, WA_DOWN_ALERT_MIN * 60 * 1000);
     },
     onLoggedOut: (reason) => notify(`🔴 WhatsApp a fermé la session du bot (${reason || 'raison inconnue'}). Pour relier à nouveau, relance le bot : un nouveau code arrivera ici.`),
     onNotice: (ev) => {
