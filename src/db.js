@@ -141,4 +141,24 @@ export function kvGet(key) {
 
 export function kvSet(key, value) {
   db.prepare('INSERT INTO kv (key, value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run(key, String(value));
+  if (key === 'paused') publishStatus();
 }
+
+// État public minimal (pause on/off uniquement) lu par le bot de supervision du VPS.
+// Ne contient aucune donnée de conversation. Un échec d'écriture n'affecte pas le bot.
+const STATUS_FILE = '/var/lib/wabot-status/state';
+function publishStatus() {
+  try {
+    const paused = kvGet('paused') === '1';
+    let since = new Date().toISOString();
+    try {
+      const prev = JSON.parse(fs.readFileSync(STATUS_FILE, 'utf8'));
+      if (prev.paused === paused && prev.since) since = prev.since;
+    } catch { /* pas encore de fichier */ }
+    const state = { paused, since };
+    fs.writeFileSync(STATUS_FILE + '.tmp', JSON.stringify(state));
+    fs.chmodSync(STATUS_FILE + '.tmp', 0o644); // start.sh impose umask 077
+    fs.renameSync(STATUS_FILE + '.tmp', STATUS_FILE);
+  } catch { /* supervision seulement */ }
+}
+publishStatus();
