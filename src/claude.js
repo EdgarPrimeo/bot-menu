@@ -17,6 +17,13 @@ const SHOPPERS = new Set(['edgar', 'elsa', 'both', 'none', 'restaurant']);
 
 export class ClaudeUnavailable extends Error {}
 
+// Jeton Claude partagé par les bots du VPS (posé par Edgar avec `sudo claude-token`). Absent ou illisible :
+// on garde la connexion propre de wabot (~/.claude).
+const TOKEN_FILE = '/etc/claude/oauth-token';
+function sharedToken() {
+  try { return fs.readFileSync(TOKEN_FILE, 'utf8').trim(); } catch { return ''; }
+}
+
 // Consignes + fichiers écrits par Edgar (goûts, style) : ce sont les seules sources de confiance.
 // Les messages WhatsApp, eux, arrivent séparément dans le prompt utilisateur, balisés comme données.
 function systemPrompt(contactName) {
@@ -115,6 +122,8 @@ function runClaude(system, prompt) {
       HOME: process.env.HOME, PATH: '/usr/bin:/bin', LANG: 'C.UTF-8', TZ: process.env.TZ || 'Europe/Paris',
       CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1', DISABLE_AUTOUPDATER: '1', DISABLE_TELEMETRY: '1',
     };
+    const token = sharedToken();
+    if (token) env.CLAUDE_CODE_OAUTH_TOKEN = token;
     const child = spawn('nice', args, { cwd: SANDBOX, env, stdio: ['pipe', 'pipe', 'pipe'] });
     let out = '';
     let done = false;
