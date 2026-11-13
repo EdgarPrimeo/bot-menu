@@ -209,3 +209,9 @@ La session WhatsApp est conservée : pas besoin de relier à nouveau.
 - **Baileys abandonné** : la liaison de l'appareil échouait (QR et code) à cause de bugs non publiés de la bibliothèque ([#2765](https://github.com/WhiskeySockets/Baileys/pull/2765), [#2872](https://github.com/WhiskeySockets/Baileys/pull/2872)). Remplacé par [whatsmeow](https://github.com/tulir/whatsmeow), plus fiable.
 - **SQLite 100 % Go** (`modernc.org/sqlite`) dans wa-bridge, pour pouvoir compiler depuis Windows sans compilateur C ; `_txlock=immediate` évite les erreurs « database is locked ».
 - **Pas de service systemd** pour l'instant : lancement manuel dans tmux, en attendant la validation.
+
+## Connexion à Claude
+`src/claude.js` lit le **jeton Claude partagé** du VPS `/etc/claude/oauth-token` (même jeton que Gabi et Stanley,
+abonnement Pro d'Edgar, ~1 an) et le passe à `claude -p` par la variable `CLAUDE_CODE_OAUTH_TOKEN` (jamais en argument).
+`wabot` est dans le groupe `claude-token` pour pouvoir le lire. Renouveler : `sudo claude-token --generer`.
+Sans jeton, repli sur la connexion propre de wabot (`~/.claude`).
